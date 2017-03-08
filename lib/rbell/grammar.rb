@@ -1,5 +1,7 @@
 module Rbell
   class Grammar
+    attr_reader :productions
+
     def initialize
       @productions = {}
       @terminals = {}
@@ -8,8 +10,15 @@ module Rbell
     def compile(&block)
       instance_eval(&block) if block
 
-      parsed_grammar = parse
+      parsed_productions = parse
+      @productions = {}
+      parsed_productions.each { |k, v| @productions[k] = v.compile }
+
       # TODO simplification thompson
+      # TODO calculate first set
+      # TODO calculate follow set
+      # TODO calculate parser table
+
       raise 'TODO'
     end
 

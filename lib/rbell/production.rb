@@ -50,9 +50,20 @@ module Rbell
     alias_method :star, :*
     alias_method :plus, :+
 
+    def compile
+      raise "Please override `compile' method."
+    end
+
     private
     def parsed_productions
       @grammar.instance_variable_get(:@parsed_productions)
+    end
+
+    def gen_production
+      name = :"##{@grammar.productions.length}"
+      prod = Production.new(@grammar, name)
+      @grammar.productions[name] = [[prod]]
+      prod
     end
   end
 
@@ -68,6 +79,16 @@ module Rbell
     def parse
       instance_eval(&@body)
     end
+
+    def compile
+      [[self]]
+    end
+
+    def inspect
+      "<#{self.class} #{name}>"
+    end
+
+    alias_method :to_s, :inspect
   end
 
   class AlternativeProduction < BaseProduction
@@ -81,6 +102,11 @@ module Rbell
     def |(prod, &block)
       productions << prod
       clause(self, &block)
+    end
+
+    def compile
+      prods = productions.map(&:compile)
+      prods.reduce(&:+)
     end
   end
 
@@ -96,6 +122,11 @@ module Rbell
       productions << prod
       clause(self, &block)
     end
+
+    def compile
+      prods = productions.map(&:compile)
+      prods.reduce { |p1, p2| p1.product(p2).map! { |p| p.flatten!(1) } }
+    end
   end
 
   class OptionalProduction < BaseProduction
@@ -105,12 +136,50 @@ module Rbell
       super grammar
       @production = production
     end
+
+    def compile
+      # x -> y (a ...)? z ;   =>   x  -> y p1 z ;
+      #                            p1 -> a ... | ~ ;
+
+      prod = gen_production
+
+      compiled_prod = production.compile << []
+      @grammar.productions[prod.name] = compiled_prod
+
+      [[prod]]
+    end
   end
 
   class StarProduction < OptionalProduction
+    def compile
+      # x -> y (a ...)* z ;   =>   x  -> y p2 z ;
+      #                            p1 -> a ... ;
+      #                            p2 -> p1 p2 | ~ ;
+
+      prod1 = gen_production
+      prod2 = gen_production
+
+      @grammar.productions[prod1.name] = production.compile
+      @grammar.productions[prod2.name] = [[prod1, prod2], []]
+
+      [[prod2]]
+    end
   end
 
   class PlusProduction < OptionalProduction
+    def compile
+      # x -> y (a ...)* z ;   =>   x  -> y p1 p2 z ;
+      #                            p1 -> a ... ;
+      #                            p2 -> p1 p2 | ~ ;
+
+      prod1 = gen_production
+      prod2 = gen_production
+
+      @grammar.productions[prod1.name] = production.compile
+      @grammar.productions[prod2.name] = [[prod1, prod2], []]
+
+      [[prod1, prod2]]
+    end
   end
 
   class ActionProduction < BaseProduction
@@ -119,6 +188,10 @@ module Rbell
     def initialize(grammar, action)
       super grammar
       @action = action
+    end
+
+    def compile
+      [[self]]
     end
   end
 
@@ -129,5 +202,15 @@ module Rbell
       super grammar
       @token = token
     end
+
+    def compile
+      [[self]]
+    end
+
+    def inspect
+      "<#{self.class} #{token}>"
+    end
+
+    alias_method :to_s, :inspect
   end
 end

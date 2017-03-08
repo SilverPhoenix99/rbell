@@ -1,7 +1,6 @@
 module Rbell
   class Grammar
-    def initialize(parser_module)
-      @parser_module = parser_module
+    def initialize
       @productions = {}
       @terminals = {}
     end
@@ -9,8 +8,8 @@ module Rbell
     def compile(&block)
       instance_eval(&block) if block
 
-      parse
-      # TODO simplification thomson
+      parsed_grammar = parse
+      # TODO simplification thompson
       raise 'TODO'
     end
 
@@ -20,14 +19,14 @@ module Rbell
 
     def production(name, prod = nil, &block)
       name = name.to_sym
-      prod ||= Production.new(name, &block)
+      prod ||= Production.new(self, name, &block)
       @productions[name] = prod
     end
 
     def tokens(*args)
       args.each do |arg|
         name = arg.to_sym
-        @terminals[name] ||= Terminal.new(name)
+        @terminals[name] ||= Terminal.new(self, name)
       end
     end
 
@@ -39,28 +38,15 @@ module Rbell
 
       unless @parsed_productions.has_key?(name)
         @parsed_productions[name] = prod
-        @parsed_productions[name] = instance_eval(&prod.clause)
+        @parsed_productions[name] = prod.parse
       end
 
       prod
     end
 
     def method_missing(name, *args, &block)
-      prod = const_missing(name)
-      prod = args.reduce(prod, &:&) unless args.length == 0
-      clause(prod, &block)
-    end
-
-    def clause(prod, &block)
-      BaseProduction.compact(prod, &block)
-    end
-
-    def star(prod, *args, &block)
-      prod.*(*args, &block)
-    end
-
-    def plus(prod, *args, &block)
-      prod.+(*args, &block)
+      super if args.length != 0 || !block
+      production(name, &block)
     end
 
     alias_method :terminals, :tokens
@@ -69,7 +55,7 @@ module Rbell
     def parse
       main_prod = @productions[:main]
       @parsed_productions = { main: main_prod }
-      @parsed_productions[:main] = instance_eval(&main_prod.clause)
+      @parsed_productions[:main] = main_prod.parse
       remove_instance_variable(:@parsed_productions)
     end
   end

@@ -2,7 +2,7 @@ module Rbell
   module Parser
     module ClassMethods
       def grammar(&block)
-        @grammar = Grammar.new(self)
+        @grammar = Grammar.new
         @grammar.compile(&block)
         @grammar
       end

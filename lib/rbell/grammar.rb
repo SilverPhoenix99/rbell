@@ -14,7 +14,8 @@ module Rbell
       @productions = {}
       parsed_productions.each { |k, v| @productions[k] = v.compile }
 
-      # TODO simplification thompson
+      simplify_productions
+
       # TODO calculate first set
       # TODO calculate follow set
       # TODO calculate parser table
@@ -60,6 +61,14 @@ module Rbell
 
     alias_method :terminals, :tokens
 
+    def inspect
+      @productions.map do |name, clauses|
+        ws = ' ' * name.length
+        clauses = clauses.map { |clause| clause.map(&:inspect).join(' ') }.join("\n#{ws} | ")
+        "#{name.to_s} : #{clauses}\n"
+      end.join("\n")
+    end
+
     private
     def parse
       main_prod = @productions[:main]
@@ -67,5 +76,27 @@ module Rbell
       @parsed_productions[:main] = main_prod.parse
       remove_instance_variable(:@parsed_productions)
     end
+
+    def simplify_productions
+      loop do
+        prods = @productions.select { |_, clauses| clauses.length == 1 && clauses[0].length == 1 }
+
+        break if prods.empty?
+
+        prods.each do |name, clauses|
+          @productions.delete(name)
+
+          name = Production.new(self, name)
+          rule = clauses.first.first
+
+          @productions.each do |_, cs|
+            cs.each do |clause|
+              clause.map! { |r| r == name ? rule : r }
+            end
+          end
+        end
+      end
+    end
+
   end
 end

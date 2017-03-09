@@ -54,6 +54,10 @@ module Rbell
       raise "Please override `compile' method."
     end
 
+    def terminal?
+      false
+    end
+
     private
     def parsed_productions
       @grammar.instance_variable_get(:@parsed_productions)
@@ -85,10 +89,16 @@ module Rbell
     end
 
     def inspect
+      name.to_s
+    end
+
+    def to_s
       "<#{self.class} #{name}>"
     end
 
-    alias_method :to_s, :inspect
+    def ==(other)
+      other.is_a?(self.class) && other.name == name
+    end
   end
 
   class AlternativeProduction < BaseProduction
@@ -108,6 +118,10 @@ module Rbell
       prods = productions.map(&:compile)
       prods.reduce(&:+)
     end
+
+    def ==(other)
+      other.is_a?(self.class) && other.productions == productions
+    end
   end
 
   class SequenceProduction < BaseProduction
@@ -125,7 +139,11 @@ module Rbell
 
     def compile
       prods = productions.map(&:compile)
-      prods.reduce { |p1, p2| p1.product(p2).map! { |p| p.flatten!(1) } }
+      prods.reduce { |p1, p2| p1.product(p2).map! { |p| p.tap { |x| x.flatten!(1) } } }
+    end
+
+    def ==(other)
+      other.is_a?(self.class) && other.productions == productions
     end
   end
 
@@ -143,10 +161,14 @@ module Rbell
 
       prod = gen_production
 
-      compiled_prod = production.compile << []
+      compiled_prod = production.compile << [EmptyProduction.instance]
       @grammar.productions[prod.name] = compiled_prod
 
       [[prod]]
+    end
+
+    def ==(other)
+      other.is_a?(self.class) && other.production == production
     end
   end
 
@@ -156,11 +178,18 @@ module Rbell
       #                            p1 -> a ... ;
       #                            p2 -> p1 p2 | ~ ;
 
+      prod = production.compile
       prod1 = gen_production
-      prod2 = gen_production
 
-      @grammar.productions[prod1.name] = production.compile
-      @grammar.productions[prod2.name] = [[prod1, prod2], []]
+      if prod.length == 1 && prod.first.length == 1
+        prod2 = prod1
+        prod1 = prod.first.first
+      else
+        prod2 = gen_production
+        @grammar.productions[prod1.name] = prod
+      end
+
+      @grammar.productions[prod2.name] = [[prod1, prod2], [EmptyProduction.instance]]
 
       [[prod2]]
     end
@@ -172,11 +201,18 @@ module Rbell
       #                            p1 -> a ... ;
       #                            p2 -> p1 p2 | ~ ;
 
+      prod = production.compile
       prod1 = gen_production
-      prod2 = gen_production
 
-      @grammar.productions[prod1.name] = production.compile
-      @grammar.productions[prod2.name] = [[prod1, prod2], []]
+      if prod.length == 1 && prod.first.length == 1
+        prod2 = prod1
+        prod1 = prod.first.first
+      else
+        prod2 = gen_production
+        @grammar.productions[prod1.name] = prod
+      end
+
+      @grammar.productions[prod2.name] = [[prod1, prod2], [EmptyProduction.instance]]
 
       [[prod1, prod2]]
     end
@@ -193,6 +229,10 @@ module Rbell
     def compile
       [[self]]
     end
+
+    def ==(other)
+      other.is_a?(self.class) && other.action == action
+    end
   end
 
   class Terminal < BaseProduction
@@ -208,9 +248,49 @@ module Rbell
     end
 
     def inspect
+      token.to_s
+    end
+
+    def to_s
       "<#{self.class} #{token}>"
     end
 
-    alias_method :to_s, :inspect
+    def ==(other)
+      other.is_a?(self.class) && other.token == token
+    end
+
+    def terminal?
+      true
+    end
+  end
+
+  class EmptyProduction < BaseProduction
+    def initialize; end
+
+    class << self
+      private :new
+      attr_reader :instance
+    end
+    @instance = new
+
+    def compile
+      [[self]]
+    end
+
+    def inspect
+      "\u03B5"
+    end
+
+    def to_s
+      "<#{self.class} \u03B5>"
+    end
+
+    def ==(other)
+      other.is_a?(self.class)
+    end
+
+    def terminal?
+      true
+    end
   end
 end

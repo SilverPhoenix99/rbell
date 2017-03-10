@@ -1,3 +1,5 @@
+require 'set'
+
 module Rbell
   class Grammar
     attr_reader :productions
@@ -16,7 +18,7 @@ module Rbell
 
       simplify_productions
 
-      # TODO calculate first set
+      calc_first
       # TODO calculate follow set
       # TODO calculate parser table
 
@@ -77,26 +79,57 @@ module Rbell
       remove_instance_variable(:@parsed_productions)
     end
 
-    def simplify_productions
-      loop do
-        prods = @productions.select { |_, clauses| clauses.length == 1 && clauses[0].length == 1 }
+    def calc_first
+      @first = Hash.new do |hash, key|
+        hash[key] = Set.new
+      end
 
-        break if prods.empty?
+      @productions.each do |name, prod|
+        prod.select { |sub| sub.first.terminal? }.map(&:first).each { |t| @first[name] << t }
+      end
 
-        prods.each do |name, clauses|
-          @productions.delete(name)
+      new_count = 0
+      until @first.values.map(&:count).reduce(&:+) == new_count
+        @productions.each do |name, prod|
+          prod.each do |sub|
+            sub.map do |sub_prod|
+              next if sub_prod.terminal?
+              sub_prod.name.to_sym
+            end.each do |p|
+              next if @first[p].empty?
+              @first[p].each do |t|
+                @first[name] << t unless t.is_a?(EmptyProduction)
+              end
+              break unless @first[p].any? { |t| t.is_a?(EmptyProduction) }
+            end
+          end
+        end
+        new_count = @first.values.map(&:count).reduce(&:+)
+      end
 
-          name = Production.new(self, name)
-          rule = clauses.first.first
 
-          @productions.each do |_, cs|
-            cs.each do |clause|
-              clause.map! { |r| r == name ? rule : r }
+      end
+
+      def simplify_productions
+        loop do
+          prods = @productions.select { |_, clauses| clauses.length == 1 && clauses[0].length == 1 }
+
+          break if prods.empty?
+
+          prods.each do |name, clauses|
+            @productions.delete(name)
+
+            name = Production.new(self, name)
+            rule = clauses.first.first
+
+            @productions.each do |_, cs|
+              cs.each do |clause|
+                clause.map! { |r| r == name ? rule : r }
+              end
             end
           end
         end
       end
-    end
 
+    end
   end
-end

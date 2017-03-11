@@ -39,7 +39,7 @@ module Rbell
     end
 
     def const_missing(name)
-      @grammar.send(:const_missing, name)
+      @grammar.find_production(name)
     end
 
     def method_missing(name, *args, &block)
@@ -267,11 +267,11 @@ module Rbell
   class EmptyProduction < BaseProduction
     def initialize; end
 
+    @instance = allocate.freeze
     class << self
-      private :new
       attr_reader :instance
+      alias_method :new, :instance
     end
-    @instance = new
 
     def compile
       [[self]]

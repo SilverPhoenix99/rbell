@@ -26,7 +26,7 @@ module Rbell
       simplify_productions
       calculate_firsts_set
       calculate_follows_set
-      calculate_parse_table
+      calculate_parser_table
     end
 
     def main(&block)
@@ -46,7 +46,7 @@ module Rbell
       end
     end
 
-    def const_missing(name)
+    def find_production(name)
       prod = @terminals[name]
       return prod if prod
 
@@ -76,17 +76,17 @@ module Rbell
     end
 
     private
-    def parse
+    def compile_productions
+      parsed_productions = parse_productions
+      @productions = {}
+      parsed_productions.each { |k, v| @productions[k] = v.compile }
+    end
+
+    def parse_productions
       main_prod = @productions[:main]
       @parsed_productions = { main: main_prod }
       @parsed_productions[:main] = main_prod.parse
       remove_instance_variable(:@parsed_productions)
-    end
-
-    def compile_productions
-      parsed_productions = parse
-      @productions = {}
-      parsed_productions.each { |k, v| @productions[k] = v.compile }
     end
 
     def simplify_productions
@@ -145,7 +145,7 @@ module Rbell
               set = calculate_firsts(rule[index..-1])
 
               @follow[prod.name].merge(@follow[name]) if set.include?(EmptyProduction.instance)
-              @follow[prod.name].merge(set.delete(EmptyProduction.instance))
+              @follow[prod.name].merge(set - [EmptyProduction.instance])
             end
           end
         end
@@ -170,7 +170,7 @@ module Rbell
       end
     end
 
-    def calculate_parse_table
+    def calculate_parser_table
       raise 'TODO'
     end
   end

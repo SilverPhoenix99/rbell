@@ -20,8 +20,8 @@ module Rbell
         raise "Please override `advance_token' method."
       end
 
-      def current_token_name
-        raise "Please override `current_token_name' method."
+      def mathes_token?(current_token, name)
+        raise "Please override `mathes_token?' method."
       end
     end
 
@@ -31,7 +31,7 @@ module Rbell
         mod.include InstanceMethods
 
         def mod.const_missing(name)
-          @grammar.send(:const_missing, name)
+          @grammar.find_production(name)
         end
       end
 

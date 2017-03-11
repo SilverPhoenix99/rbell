@@ -58,6 +58,10 @@ module Rbell
       false
     end
 
+    def <=>(other)
+      name.to_s <=> other.name.to_s
+    end
+
     private
     def parsed_productions
       @grammar.instance_variable_get(:@parsed_productions)
@@ -226,6 +230,10 @@ module Rbell
       @action = action
     end
 
+    def name
+      action.to_s
+    end
+
     def compile
       [[self]]
     end
@@ -242,6 +250,8 @@ module Rbell
       super grammar
       @token = token
     end
+
+    alias_method :name, :token
 
     def compile
       [[self]]
@@ -273,13 +283,15 @@ module Rbell
       alias_method :new, :instance
     end
 
+    def name
+      "\u03B5"
+    end
+
     def compile
       [[self]]
     end
 
-    def inspect
-      "\u03B5"
-    end
+    alias_method :inspect, :name
 
     def to_s
       "<#{self.class} \u03B5>"

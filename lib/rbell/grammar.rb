@@ -111,7 +111,7 @@ module Rbell
     end
 
     def calculate_firsts_set
-      @first = Hash.new { |hash, key| hash[key] = Set.new }
+      @first = Hash.new { |hash, key| hash[key] = SortedSet.new }
 
       @productions.each do |name, prod|
         @first[name].merge(prod.map(&:first).select(&:terminal?))
@@ -130,7 +130,7 @@ module Rbell
     end
 
     def calculate_follows_set
-      @follow = Hash.new { |hash, key| hash[key] = Set.new }
+      @follow = Hash.new { |hash, key| hash[key] = SortedSet.new }
       @follow[:main] << @end_of_input
 
       productions = @first.keys.map { |name| Production.new(self, name) }
@@ -161,7 +161,7 @@ module Rbell
               set << p
               break
             when Production
-              set.merge(@first[p.name].reject { |t| t.is_a?(EmptyProduction) })
+              set.merge(@first[p.name] - [EmptyProduction.instance])
               break unless @first[p.name].include?(EmptyProduction.instance)
           end
         end

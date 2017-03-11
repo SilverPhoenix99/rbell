@@ -3,22 +3,25 @@ module Rbell
     module ClassMethods
       def grammar(&block)
         @grammar = Grammar.new
-        @grammar.compile(&block)
-        @grammar
-      end
-
-      def const_missing(name)
-        @grammar.send(:const_missing, name)
+        @parser_table = @grammar.compile(&block)
+        singleton_class.send :remove_method, :const_missing
+        remove_instance_variable :@grammar
       end
     end
 
     module InstanceMethods
+      attr_reader :current_token
+
       def parse
         raise 'TODO'
       end
 
-      def next_token
-        raise "Please override `next_token' method."
+      def advance_token
+        raise "Please override `advance_token' method."
+      end
+
+      def current_token_name
+        raise "Please override `current_token_name' method."
       end
     end
 
@@ -26,6 +29,10 @@ module Rbell
       def included(mod)
         mod.extend ClassMethods
         mod.include InstanceMethods
+
+        def mod.const_missing(name)
+          @grammar.send(:const_missing, name)
+        end
       end
 
       alias_method :extended, :included

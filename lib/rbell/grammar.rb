@@ -7,22 +7,26 @@ module Rbell
     def initialize
       @productions = {}
       @terminals = {}
+      @end_of_input = Terminal.new(self, :EOF)
+    end
+
+    def end_of_input(token = nil)
+      if token
+        token = token.to_sym
+        tokens(token)
+        @end_of_input = @terminals[token]
+      end
+      @end_of_input
     end
 
     def compile(&block)
       instance_eval(&block) if block
 
-      parsed_productions = parse
-      @productions = {}
-      parsed_productions.each { |k, v| @productions[k] = v.compile }
-
+      compile_productions
       simplify_productions
-
-      calc_first
-      # TODO calculate follow set
-      # TODO calculate parser table
-
-      raise 'TODO'
+      calculate_firsts_set
+      calculate_follows_set
+      calculate_parse_table
     end
 
     def main(&block)
@@ -79,57 +83,95 @@ module Rbell
       remove_instance_variable(:@parsed_productions)
     end
 
-    def calc_first
-      @first = Hash.new do |hash, key|
-        hash[key] = Set.new
+    def compile_productions
+      parsed_productions = parse
+      @productions = {}
+      parsed_productions.each { |k, v| @productions[k] = v.compile }
+    end
+
+    def simplify_productions
+      loop do
+        prods = @productions.select { |_, clauses| clauses.length == 1 && clauses.first.length == 1 }
+
+        break if prods.empty?
+
+        prods.each do |name, clauses|
+          @productions.delete(name)
+
+          name = Production.new(self, name)
+          rule = clauses.first.first
+
+          @productions.each do |_, cs|
+            cs.each do |clause|
+              clause.map! { |r| r == name ? rule : r }
+            end
+          end
+        end
       end
+    end
+
+    def calculate_firsts_set
+      @first = Hash.new { |hash, key| hash[key] = Set.new }
 
       @productions.each do |name, prod|
-        prod.select { |sub| sub.first.terminal? }.map(&:first).each { |t| @first[name] << t }
+        @first[name].merge(prod.map(&:first).select(&:terminal?))
       end
 
-      new_count = 0
-      until @first.values.map(&:count).reduce(&:+) == new_count
+      count, new_count = nil, 0
+      until count == new_count
+        count = new_count
         @productions.each do |name, prod|
-          prod.each do |sub|
-            sub.map do |sub_prod|
-              next if sub_prod.terminal?
-              sub_prod.name.to_sym
-            end.each do |p|
-              next if @first[p].empty?
-              @first[p].each do |t|
-                @first[name] << t unless t.is_a?(EmptyProduction)
-              end
-              break unless @first[p].any? { |t| t.is_a?(EmptyProduction) }
-            end
+          prod.each do |rule|
+            @first[name].merge(calculate_firsts(rule))
           end
         end
         new_count = @first.values.map(&:count).reduce(&:+)
       end
+    end
 
+    def calculate_follows_set
+      @follow = Hash.new { |hash, key| hash[key] = Set.new }
+      @follow[:main] << @end_of_input
 
-      end
+      productions = @first.keys.map { |name| Production.new(self, name) }
 
-      def simplify_productions
-        loop do
-          prods = @productions.select { |_, clauses| clauses.length == 1 && clauses[0].length == 1 }
+      count, new_count = nil, 0
+      until count == new_count
+        count = new_count
+        productions.each do |prod|
+          @productions.each do |name, rules|
+            rules.select { |rule| rule.include?(prod) }.each do |rule|
+              index = rule.find_index(prod) + 1
+              set = calculate_firsts(rule[index..-1])
 
-          break if prods.empty?
-
-          prods.each do |name, clauses|
-            @productions.delete(name)
-
-            name = Production.new(self, name)
-            rule = clauses.first.first
-
-            @productions.each do |_, cs|
-              cs.each do |clause|
-                clause.map! { |r| r == name ? rule : r }
-              end
+              @follow[prod.name].merge(@follow[name]) if set.include?(EmptyProduction.instance)
+              @follow[prod.name].merge(set.delete(EmptyProduction.instance))
             end
           end
         end
+        new_count = @follow.values.map(&:count).reduce(&:+)
       end
+    end
 
+    def calculate_firsts(rule)
+      Set.new.tap do |set|
+        has_epsilon = rule.each do |p|
+          case p
+            when Terminal
+              set << p
+              break
+            when Production
+              set.merge(@first[p.name].reject { |t| t.is_a?(EmptyProduction) })
+              break unless @first[p.name].include?(EmptyProduction.instance)
+          end
+        end
+
+        set << EmptyProduction.instance if has_epsilon
+      end
+    end
+
+    def calculate_parse_table
+      raise 'TODO'
     end
   end
+end

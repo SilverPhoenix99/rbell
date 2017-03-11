@@ -14,11 +14,16 @@ module Rbell
     def &(prod, &block)
       prod = SequenceProduction.new(@grammar, [self, prod])
       clause(prod, &block)
+    rescue Exception => e
+      puts prod
+      puts block
+      puts e.message
+      puts e.backtrace.inspect
     end
 
-    def opt(&block)
+    def opt(*args, &block)
       prod = OptionalProduction.new(@grammar, self)
-      clause(prod, &block)
+      clause(prod, *args, &block)
     end
 
     def *(*args, &block)

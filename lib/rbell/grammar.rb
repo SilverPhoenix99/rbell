@@ -171,7 +171,19 @@ module Rbell
     end
 
     def calculate_parser_table
-      raise 'TODO'
+      @table = Hash.new { |hash, key| hash[key] = Hash.new }
+
+      @productions.each do |name, p|
+        @first[name].each do |t|
+          if t.is_a?(EmptyProduction)
+            @follow[name].each do |f|
+              @table[name][f.name] = p
+            end
+          else
+            @table[name][t.name] = p
+          end
+        end
+      end
     end
   end
 end

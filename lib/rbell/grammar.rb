@@ -90,10 +90,7 @@ module Rbell
     end
 
     def simplify_productions
-      loop do
-        prods = @productions.select { |_, clauses| clauses.length == 1 && clauses.first.length == 1 }
-
-        break if prods.empty?
+      until (prods = @productions.select { |_, clauses| clauses.length == 1 && clauses.first.length == 1 }).empty?
 
         prods.each do |name, clauses|
           @productions.delete(name)
@@ -171,19 +168,24 @@ module Rbell
     end
 
     def calculate_parser_table
-      @table = Hash.new { |hash, key| hash[key] = Hash.new }
-
-      @productions.each do |name, p|
-        @first[name].each do |t|
-          if t.is_a?(EmptyProduction)
-            @follow[name].each do |f|
-              @table[name][f.name] = p
+      Hash.new { |hash, key| hash[key] = Hash.new }.tap do |table|
+        @productions.each do |name, prods|
+          prods.each do |prod|
+            calculate_firsts(prod).each do |t|
+              if t.is_a?(EmptyProduction)
+                @follow[name].each do |t|
+                  raise "first/follow conflict: #{name} -> #{t.name}" if table[name][t.name]
+                  table[name][t.name] = prod
+                end
+              else
+                raise "first/first conflict: #{name} -> #{t.name}" if table[name][t.name]
+                table[name][t.name] = prod
+              end
             end
-          else
-            @table[name][t.name] = p
           end
         end
       end
     end
+
   end
 end

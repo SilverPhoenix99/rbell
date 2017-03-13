@@ -4,6 +4,7 @@ module Rbell
       def grammar(&block)
         @grammar = Grammar.new
         @parser_table = @grammar.compile(&block)
+        @end_of_input = @grammar.end_of_input
         singleton_class.send :remove_method, :const_missing
         remove_instance_variable :@grammar
       end
@@ -20,8 +21,12 @@ module Rbell
         raise "Please override `advance_token' method."
       end
 
-      def mathes_token?(current_token, name)
-        raise "Please override `mathes_token?' method."
+      def matches_token?(current_token, name)
+        raise "Please override `matches_token?' method."
+      end
+
+      def end_of_input
+        self.class.instance_variable_get(:@end_of_input)
       end
     end
 

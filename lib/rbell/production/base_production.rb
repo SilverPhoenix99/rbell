@@ -2,17 +2,17 @@ module Rbell
   class BaseProduction
     attr_reader :grammar
 
-    def initialize(grammar)
-      @grammar = grammar
+    def initialize(grammar = nil)
+      @grammar = grammar if grammar
     end
 
     def |(prod, &block)
-      prod = AlternativeProduction.new(@grammar, [self, prod])
+      prod = AlternativeProduction.new([self, prod], @grammar)
       clause(prod, &block)
     end
 
     def &(prod, &block)
-      prod = SequenceProduction.new(@grammar, [self, prod])
+      prod = SequenceProduction.new([self, prod], @grammar)
       clause(prod, &block)
     rescue Exception => e
       puts prod
@@ -22,24 +22,24 @@ module Rbell
     end
 
     def opt(*args, &block)
-      prod = OptionalProduction.new(@grammar, self)
+      prod = OptionalProduction.new(self, @grammar)
       clause(prod, *args, &block)
     end
 
     def *(*args, &block)
-      prod = StarProduction.new(@grammar, self)
+      prod = StarProduction.new(self, @grammar)
       clause(prod, *args, &block)
     end
 
     def +(*args, &block)
-      prod = PlusProduction.new(@grammar, self)
+      prod = PlusProduction.new(self, @grammar)
       clause(prod, *args, &block)
     end
 
     def clause(prod, *args, &block)
       prod = args.reduce(prod, &:&) unless args.length == 0
       return prod unless block
-      action = ActionProduction.new(@grammar, block)
+      action = ActionProduction.new(block, @grammar)
       prod & action
     end
 
@@ -68,13 +68,9 @@ module Rbell
     end
 
     private
-    def parsed_productions
-      @grammar.instance_variable_get(:@parsed_productions)
-    end
-
     def gen_production
       name = :"##{@grammar.productions.length}"
-      prod = Production.new(@grammar, name)
+      prod = Production.new(name, @grammar)
       @grammar.productions[name] = [[prod]]
       prod
     end

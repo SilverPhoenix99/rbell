@@ -2,7 +2,7 @@ module Rbell
   class ActionProduction < BaseProduction
     attr_reader :action
 
-    def initialize(grammar, action)
+    def initialize(action, grammar = nil)
       super grammar
       @action = action
     end

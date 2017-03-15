@@ -2,7 +2,7 @@ module Rbell
   class Terminal < BaseProduction
     attr_reader :token
 
-    def initialize(grammar, token)
+    def initialize(token, grammar = nil)
       super grammar
       @token = token
     end

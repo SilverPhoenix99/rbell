@@ -2,7 +2,7 @@ module Rbell
   class OptionalProduction < BaseProduction
     attr_reader :production
 
-    def initialize(grammar, production)
+    def initialize(production, grammar = nil)
       super grammar
       @production = production
     end

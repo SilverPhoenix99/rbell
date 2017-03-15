@@ -2,7 +2,7 @@ module Rbell
   class SequenceProduction < BaseProduction
     attr_reader :productions
 
-    def initialize(grammar, productions)
+    def initialize(productions, grammar = nil)
       super grammar
       @productions  = productions
     end

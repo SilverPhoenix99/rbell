@@ -2,7 +2,7 @@ module Rbell
   class Production < BaseProduction
     attr_reader :name, :body
 
-    def initialize(grammar, name, &block)
+    def initialize(name, grammar = nil, &block)
       super grammar
       @name = name
       @body = block

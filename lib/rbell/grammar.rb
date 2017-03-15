@@ -7,7 +7,7 @@ module Rbell
     def initialize
       @productions = {}
       @terminals = {}
-      @end_of_input = Terminal.new(self, :EOF)
+      @end_of_input = Terminal.new(:EOF, self)
     end
 
     def end_of_input(token = nil)
@@ -35,14 +35,14 @@ module Rbell
 
     def production(name, prod = nil, &block)
       name = name.to_sym
-      prod ||= Production.new(self, name, &block)
+      prod ||= Production.new(name, self, &block)
       @productions[name] = prod
     end
 
     def tokens(*args)
       args.each do |arg|
         name = arg.to_sym
-        @terminals[name] ||= Terminal.new(self, name)
+        @terminals[name] ||= Terminal.new(name, self)
       end
     end
 
@@ -95,7 +95,7 @@ module Rbell
         prods.each do |name, clauses|
           @productions.delete(name)
 
-          name = Production.new(self, name)
+          name = Production.new(name, self)
           rule = clauses.first.first
 
           @productions.each do |_, cs|
@@ -130,7 +130,7 @@ module Rbell
       @follow = Hash.new { |hash, key| hash[key] = SortedSet.new }
       @follow[:main] << @end_of_input
 
-      productions = @first.keys.map { |name| Production.new(self, name) }
+      productions = @first.keys.map { |name| Production.new(name, self) }
 
       count, new_count = nil, 0
       until count == new_count
@@ -168,23 +168,30 @@ module Rbell
     end
 
     def calculate_parser_table
-      Hash.new { |hash, key| hash[key] = Hash.new }.tap do |table|
-        @productions.each do |name, prods|
-          prods.each do |prod|
-            calculate_firsts(prod).each do |t|
-              if t.is_a?(EmptyProduction)
-                @follow[name].each do |t|
-                  raise "first/follow conflict: #{name} -> #{t.name}" if table[name][t.name]
-                  table[name][t.name] = prod
-                end
-              else
-                raise "first/first conflict: #{name} -> #{t.name}" if table[name][t.name]
+      table = Hash.new { |hash, key| hash[key] = Hash.new }
+
+      @productions.each do |name, prods|
+        prods.each do |prod|
+          calculate_firsts(prod).each do |t|
+            if t.is_a?(EmptyProduction)
+              @follow[name].each do |t|
+                raise "first/follow conflict: #{name} -> #{t.name}" if table[name][t.name]
                 table[name][t.name] = prod
               end
+            else
+              raise "first/first conflict: #{name} -> #{t.name}" if table[name][t.name]
+              table[name][t.name] = prod
             end
           end
         end
       end
+
+      # reverse all rules
+      rules = {}.compare_by_identity
+      table.values.flat_map(&:values).each { |rule| rules[rule] = true }
+      rules.keys.each(&:reverse!)
+
+      table
     end
 
   end

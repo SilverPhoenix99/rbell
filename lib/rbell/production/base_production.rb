@@ -21,7 +21,7 @@ module Rbell
       puts e.backtrace.inspect
     end
 
-    def opt(*args, &block)
+    def _?(*args, &block)
       prod = OptionalProduction.new(self, @grammar)
       clause(prod, *args, &block)
     end
@@ -54,6 +54,7 @@ module Rbell
 
     alias_method :star, :*
     alias_method :plus, :+
+    alias_method :opt, :_?
 
     def compile
       raise "Please override `compile' method."

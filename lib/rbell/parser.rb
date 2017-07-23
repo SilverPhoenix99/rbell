@@ -8,6 +8,7 @@ module Rbell
         @table = @grammar.compile(&block)
         @end_of_input = @grammar.end_of_input
         singleton_class.send :remove_method, :const_missing
+      ensure
         remove_instance_variable :@grammar
       end
     end

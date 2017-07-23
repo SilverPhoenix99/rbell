@@ -24,6 +24,7 @@ module Rbell
 
       compile_productions
       simplify_productions
+      rewrite
       calculate_firsts_set
       calculate_follows_set
       calculate_parser_table
@@ -90,7 +91,8 @@ module Rbell
     end
 
     def simplify_productions
-      until (prods = @productions.select { |_, clauses| clauses.length == 1 && clauses.first.length == 1 }).empty?
+
+      until (prods = @productions.select { |name, clauses| name != :main && clauses.length == 1 && clauses.first.length == 1 }).empty?
 
         prods.each do |name, clauses|
           @productions.delete(name)
@@ -105,6 +107,208 @@ module Rbell
           end
         end
       end
+
+    end
+
+    def rewrite
+
+      max_iterations = 10000
+      max_iterations.times do
+
+        next if remove_singularities
+        next if remove_unused
+        next if remove_left_recursion
+        next if remove_mutual_recursion
+        next if remove_left_corners
+        next if remove_left_factors
+        # next if remove_similar_rules
+
+        raise 'Grammar is not LL.' if @productions == {main: []}
+        return
+      end
+
+      raise 'Reached max number of trials'
+    end
+
+    def remove_singularities
+      # identify singularities
+      singularities = @productions.select do |_name, rules|
+        rules.size == 1 && rules.first.size == 1 && (
+          rules.first.first.terminal? || rules.first.first.is_a?(ActionProduction)
+        )
+      end.map { |name, rules| [name, rules.first.first] }.to_h
+
+      return false if singularities.empty? # skip if there are no singularities
+
+      @productions.each do |_name, rules|
+        rules.each do |rule|
+          buffer = rule.map do |prod|
+            if prod.is_a?(Production) && singularities.has_key?(prod.name)
+              singularities[prod.name]
+            else
+              prod
+            end
+          end
+
+          rule.replace(buffer)
+        end
+      end
+
+      true
+    end
+
+    def remove_unused
+
+      productions = @productions.map do |name, rules|
+        rules = rules.map { |rule| rule.select { |p| p.is_a?(Production) }.map(&:name) }.flatten(1)
+        [name, Set.new(rules)]
+      end.to_h
+
+      used = Set.new << :main
+
+      count = 0
+
+      while count != used.count
+        count = used.count
+        used.merge( used.map { |name| productions[name] }.reduce(:merge) )
+      end
+
+      return false if used.count == @productions.count
+
+      all_productions = Set.new(@productions.keys)
+      unused = all_productions - used
+
+      unused.each { |name| @productions.delete(name) }
+
+      true
+    end
+
+    # A -> B a | ... ; B -> A d | ... ==> A -> A d a | ... ;
+
+    def remove_mutual_recursion
+      productions = @productions.map do |name, rules|
+        rules = rules.select do |rule|
+          rule.first.is_a?(Production) && rule.first.name != name
+        end.map! { |rule| rule.first.name }.tap(&:uniq!)
+        [name, rules]
+      end.to_h
+
+      # detect mutual recursions
+      productions.each { |name, prods| prods.select! { |p| productions[p].include?(name) } }
+
+      # make sure main production is preserved
+      productions[:main]&.each { |p| productions[p].delete(:main) }
+
+      # remove loops:  a=>b & b=>a  ==>  a=>b
+      productions.each { |name, prods| prods.each { |p| productions[p].delete(name) } }
+
+      # remove productions that don't have recursion
+      productions.reject! { |_name, prods| prods.empty? }
+
+      return false if productions.empty?
+
+      productions.each do |name, prods|
+        prods.each do |prod|
+          buffer = []
+          @productions[name].each do |rule|
+            p, *rest = rule
+            if p.is_a?(Production) && p.name == prod
+              buffer.push(*@productions[prod].map { |r| r + rest })
+            else
+              buffer << rule
+            end
+          end.replace(buffer)
+        end
+      end
+
+      true
+    end
+
+    def remove_left_recursion
+
+      productions = @productions.map do |name, rules|
+        [name, rules.partition { |rule| rule.first.is_a?(Production) && rule.first.name == name }]
+      end.to_h
+
+      found_recursive = false
+
+      productions.each do |name, (recursive, rest)|
+        next if recursive.empty?
+        found_recursive = true
+
+        new_name = gen_prod_name(name)
+        new_prod = Production.new(new_name)
+
+        # A -> A [an] | [bn] ==> A -> [bn] A' ; A' -> [an] A' | ε
+        @productions[new_name] = recursive.each(&:shift).each { |rule| rule << new_prod } << [EmptyProduction.instance]
+        @productions[name] = rest.each { |rule| rule << new_prod }
+
+      end
+
+      found_recursive
+    end
+
+    # A -> Bd;  B -> cd | ae  ==>  A -> cdd | aed
+    def remove_left_corners
+      found = false
+
+      @productions.each do |name, rules|
+        buffer = []
+        rules.each do |rule|
+          p, *rest = rule
+          if p.is_a?(Production) && ![:main, name].include?(p.name)
+            found = true
+            buffer.push(*@productions[p.name].map { |r| r + rest })
+          else
+            buffer << rule
+          end
+        end.replace(buffer)
+      end
+
+      found
+    end
+
+    # A -> bcD | bcC | bcB | Bd ==> A -> bcA' | Bd   A' -> D | C | B
+    def remove_left_factors
+      prods = @productions.map do |name, rules|
+        next if rules.size == 1
+        t = Trie.new
+        rules.each { |rule| t.insert(rule) }
+        prefixes = t.group_by_prefixes
+        next if prefixes.size == rules.size
+        [name, t.group_by_prefixes]
+      end.compact!
+
+      return false if prods.empty?
+
+      prods.each do |name, prefixes|
+
+        rules = @productions[name] = []
+
+        prefixes.each do |prefix, suffixes|
+          if suffixes.size == 1 && suffixes.first.empty? # suffixes == [[]]
+            rules << prefix
+          else
+            new_name = gen_prod_name(name)
+            new_prod = Production.new(new_name)
+
+            suffix = suffixes.find(&:empty?)
+            suffix << EmptyProduction.instance if suffix
+
+            @productions[new_name] = suffixes
+
+            rules << (prefix << new_prod)
+          end
+        end
+
+      end
+
+      true
+    end
+
+    def gen_prod_name(name)
+      num = @productions.keys.map { |k| k =~ /^#{name}'(\d+)/ ? $1.to_i : 0 }.max || 0
+      :"#{name}'#{num + 1}"
     end
 
     def calculate_firsts_set
@@ -128,7 +332,7 @@ module Rbell
 
     def calculate_follows_set
       @follow = Hash.new { |hash, key| hash[key] = SortedSet.new }
-      @follow[:main] << @end_of_input
+      @follow[:main] << end_of_input
 
       productions = @first.keys.map { |name| Production.new(name, self) }
 

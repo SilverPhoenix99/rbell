@@ -1,3 +1,4 @@
+require_relative 'rbell/trie'
 require_relative 'rbell/production/base_production'
 require_relative 'rbell/production/production'
 require_relative 'rbell/production/action_production'

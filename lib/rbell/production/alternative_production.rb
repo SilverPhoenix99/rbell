@@ -12,8 +12,8 @@ module Rbell
       clause(self, &block)
     end
 
-    def compile
-      prods = productions.map(&:compile)
+    def compile(name)
+      prods = productions.map { |p| p.compile(name) }
       prods.reduce(&:+)
     end
 

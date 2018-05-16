@@ -9,7 +9,7 @@ module Rbell
 
     alias_method :name, :token
 
-    def compile
+    def compile(_name)
       [[self]]
     end
 

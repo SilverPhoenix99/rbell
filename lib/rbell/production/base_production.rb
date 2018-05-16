@@ -48,15 +48,21 @@ module Rbell
     end
 
     def method_missing(name, *args, &block)
-      prod = const_missing(name)
-      clause(prod, *args, &block)
+      if name[-1] == '?'
+        name = name.to_s.chop!.to_sym
+        prod = const_missing(name)
+        prod._?(*args, &block)
+      else
+        prod = const_missing(name)
+        clause(prod, *args, &block)
+      end
     end
 
     alias_method :star, :*
     alias_method :plus, :+
     alias_method :opt, :_?
 
-    def compile
+    def compile(_name)
       raise "Please override `compile' method."
     end
 
@@ -69,8 +75,8 @@ module Rbell
     end
 
     private
-    def gen_production
-      name = :"##{@grammar.productions.length}"
+    def gen_production(name)
+      name = @grammar.gen_prod_name(name)
       prod = Production.new(name, @grammar)
       @grammar.productions[name] = [[prod]]
       prod

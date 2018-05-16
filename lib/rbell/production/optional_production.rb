@@ -7,13 +7,13 @@ module Rbell
       @production = production
     end
 
-    def compile
+    def compile(name)
       # x -> y (a ...)? z ;   =>   x  -> y p1 z ;
       #                            p1 -> a ... | ~ ;
 
-      prod = gen_production
+      prod = gen_production(name)
 
-      compiled_prod = production.compile << [EmptyProduction.instance]
+      compiled_prod = production.compile(name) << [EmptyProduction.instance]
       @grammar.productions[prod.name] = compiled_prod
 
       [[prod]]

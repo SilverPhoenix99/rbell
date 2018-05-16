@@ -1,5 +1,9 @@
 module Rbell
+  class UnknownProductionError < StandardError; end
   module Parser
+
+    class UnexpectedTokenError < StandardError; end
+
     module ClassMethods
       attr_reader :end_of_input, :table
 
@@ -23,14 +27,14 @@ module Rbell
         @current_token ||= next_token
       end
 
-      def next_token
-        raise 'Please override method.'
-      end
-
       def consume_token
-        token = @current_token
+        token = current_token
         @current_token = nil
         token
+      end
+
+      def next_token
+        raise 'Please override method.'
       end
 
       def token_name(_token)
@@ -67,7 +71,7 @@ module Rbell
             when Terminal         then match
             when ActionProduction then @production.action.call(@result)
             when EmptyProduction  # no-op / consume
-            else raise "unknown production type: #{@production.class}"
+            else raise UnknownProductionError("unknown production type: #{@production.class}")
           end
 
         end
@@ -79,14 +83,14 @@ module Rbell
         token = @parser.current_token
         name = @parser.token_name(token)
         rule = @parser.class.table[@production.name][name]
-        raise "unexpected token #{token}. expected #{@parser.class.table[@production.name].keys.join(', ')}." unless rule
+        raise UnexpectedTokenError.new("unexpected token #{token}. expected #{@parser.class.table[@production.name].keys.join(', ')}.") unless rule
         @stack.push(*rule)
       end
 
       def match
         token = @parser.consume_token
         name = @parser.token_name(token)
-        raise "unexpected token #{token}. expected #{@production.name}." unless @production.name == name
+        raise UnexpectedTokenError.new("unexpected token #{token}. expected #{@production.name}.") unless @production.name == name
         @result << token
       end
     end

@@ -12,7 +12,7 @@ module Rbell
       instance_eval(&@body)
     end
 
-    def compile
+    def compile(_name)
       [[self]]
     end
 
